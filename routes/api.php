@@ -21,5 +21,18 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 // WordPress file upload routes
 Route::post('/files/upload', [FileUploadController::class, 'process']);
-Route::get('/files/status/{id}', [FileUploadController::class, 'getStatus']);
-Route::post('/files/update-progress/{id}', [FileUploadController::class, 'updateProgress']);
+
+// Chunked file upload routes
+Route::post('/files/upload/init', [FileUploadController::class, 'initChunkUpload']);
+Route::post('/files/upload/chunk', [FileUploadController::class, 'processChunk']);
+Route::post('/files/upload/finalize', [FileUploadController::class, 'finalizeChunkUpload']);
+Route::post('/files/upload/abort', [FileUploadController::class, 'abortChunkUpload']);
+
+// Additional routes without /api prefix for compatibility with WordPress plugin
+Route::prefix('/')->group(function () {
+    Route::post('files/upload', [FileUploadController::class, 'process']);
+    Route::post('files/upload/init', [FileUploadController::class, 'initChunkUpload']);
+    Route::post('files/upload/chunk', [FileUploadController::class, 'processChunk']);
+    Route::post('files/upload/finalize', [FileUploadController::class, 'finalizeChunkUpload']);
+    Route::post('files/upload/abort', [FileUploadController::class, 'abortChunkUpload']);
+});
