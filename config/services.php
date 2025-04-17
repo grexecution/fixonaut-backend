@@ -38,5 +38,12 @@ return [
     'wordpress' => [
         'api_key' => env('WORDPRESS_API_KEY', '1234787987654654'),
     ],
+    
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+        'model' => env('OPENAI_MODEL', 'gpt-4'),
+        'max_tokens' => env('OPENAI_MAX_TOKENS', 4000),
+        'retry_attempts' => env('OPENAI_RETRY_ATTEMPTS', 3),
+    ],
 
 ];

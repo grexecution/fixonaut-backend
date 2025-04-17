@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\FileUploadController;
+use App\Http\Controllers\Api\FileScanController;
 
 /*
 |--------------------------------------------------------------------------
@@ -15,12 +16,7 @@ use App\Http\Controllers\Api\FileUploadController;
 |
 */
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
-});
 
-// WordPress file upload routes
-Route::post('/files/upload', [FileUploadController::class, 'process']);
 
 // Chunked file upload routes
 Route::post('/files/upload/init', [FileUploadController::class, 'initChunkUpload']);
@@ -28,11 +24,18 @@ Route::post('/files/upload/chunk', [FileUploadController::class, 'processChunk']
 Route::post('/files/upload/finalize', [FileUploadController::class, 'finalizeChunkUpload']);
 Route::post('/files/upload/abort', [FileUploadController::class, 'abortChunkUpload']);
 
+// File scanning and suggestions routes
+Route::post('/files/scan/process', [FileScanController::class, 'processForSuggestions']);
+Route::post('/files/scan/batch', [FileScanController::class, 'processBatch']);
+Route::get('/files/scan/status', [FileScanController::class, 'getStatus']);
+Route::get('/files/scan/suggestions', [FileScanController::class, 'getSuggestions']);
+Route::post('/files/scan/retry', [FileScanController::class, 'retrySuggestions']);
+
 // Additional routes without /api prefix for compatibility with WordPress plugin
-Route::prefix('/')->group(function () {
-    Route::post('files/upload', [FileUploadController::class, 'process']);
-    Route::post('files/upload/init', [FileUploadController::class, 'initChunkUpload']);
-    Route::post('files/upload/chunk', [FileUploadController::class, 'processChunk']);
-    Route::post('files/upload/finalize', [FileUploadController::class, 'finalizeChunkUpload']);
-    Route::post('files/upload/abort', [FileUploadController::class, 'abortChunkUpload']);
-});
+// Route::prefix('/')->group(function () {
+//     Route::post('files/upload', [FileUploadController::class, 'process']);
+//     Route::post('files/upload/init', [FileUploadController::class, 'initChunkUpload']);
+//     Route::post('files/upload/chunk', [FileUploadController::class, 'processChunk']);
+//     Route::post('files/upload/finalize', [FileUploadController::class, 'finalizeChunkUpload']);
+//     Route::post('files/upload/abort', [FileUploadController::class, 'abortChunkUpload']);
+// });
