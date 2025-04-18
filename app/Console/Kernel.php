@@ -12,20 +12,32 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // Run file processing twice daily (8 AM and 8 PM)
-        $schedule->command('files:process-pending')
-                 ->twiceDaily(8, 20)
+        // Process pending WordPress plugin files every hour
+        $schedule->command('files:process-pending --limit=20')
+                 ->hourly()
                  ->withoutOverlapping()
                  ->appendOutputTo(storage_path('logs/schedule-file-processing.log'));
         
-        // Clean up old scans weekly (Sunday at midnight)
-        $schedule->command('files:cleanup-scans 30')
+        // Process WordPress directory files hourly
+        $schedule->command('wordpress:process-directory')
+                 ->hourly()
+                 ->withoutOverlapping()
+                 ->appendOutputTo(storage_path('logs/schedule-wordpress-directory.log'));
+        
+        // Check for and retry stuck files hourly
+        $schedule->command('files:retry-stuck --hours=1 --limit=10')
+                 ->hourly()
+                 ->withoutOverlapping()
+                 ->appendOutputTo(storage_path('logs/schedule-retry-stuck.log'));
+        
+        // Clean up old files weekly (Sunday at midnight)
+        $schedule->command('files:cleanup --days=30 --limit=100')
                  ->weekly()
                  ->sundays()
                  ->at('00:00')
                  ->appendOutputTo(storage_path('logs/schedule-cleanup.log'));
                  
-        // Retry failed scans daily
+        // Retry failed jobs daily
         $schedule->command('queue:retry all')
                  ->daily()
                  ->at('01:00')
