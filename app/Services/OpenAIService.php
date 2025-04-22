@@ -64,13 +64,19 @@ class OpenAIService
         try {
             // First check if this is a chunked file upload
             $chunkedFilePath = $this->chunkedFileProcessor->getFilePath($fileScan);
+
+            echo "<pre>";
+            $chunkedFilePath = $this->chunkedFileProcessor->getFilePath($fileScan); 
+            print_r($chunkedFilePath);
+            die();
+
             
             if ($chunkedFilePath) {
                 // This is a chunked file, use the assembled path
                 $storagePath = $chunkedFilePath;
             } else {
                 // Check for WordPress private directory path
-                if (strpos($fileScan->file_path, 'private/wordpress/') !== false) {
+                if (strpos($fileScan->file_path, 'wordpress/') !== false) {
                     $storagePath = $fileScan->file_path;
                 } else {
                     // Use the legacy path mechanism

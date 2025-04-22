@@ -41,9 +41,6 @@ class FileUploadController extends Controller
             // Decode the base64 content
             $decodedContent = base64_decode($request->input('content'));
             
-            // Get file type directory
-            $fileTypeDir = $this->getStorageDirectoryByFileType($request->input('file_type'));
-            
             // Validate file content based on file type
             $validationResult = $this->validateFileByType($request->input('file_type'), $decodedContent);
             if ($validationResult !== true) {
@@ -57,11 +54,12 @@ class FileUploadController extends Controller
                 $request->input('file_type')
             );
             
-            // Store the file content in the appropriate directory
-            $path = 'wordpress/' . $fileTypeDir . '/' . $this->getSiteFolderName($request->input('site_url')) . '/' . $fileName;
+            // Create consistent storage path: fixonaut/wordpress/siteURL/files
+            $siteFolderName = $this->getSiteFolderName($request->input('site_url'));
+            $path = "wordpress/{$siteFolderName}/{$fileName}";
             
             // Ensure directory exists
-            $directory = dirname(storage_path('app/' . $path));
+            $directory = dirname(storage_path('app/private/' . $path));
             if (!file_exists($directory)) {
                 mkdir($directory, 0777, true);
             }
@@ -77,13 +75,15 @@ class FileUploadController extends Controller
                 'scan_id' => $scan->id,
                 'timestamp' => $scan->created_at,
                 'file_type' => $request->input('file_type'),
-                'storage_directory' => $fileTypeDir,
+                'file_path' => $path,
             ]);
         } catch (\Exception $e) {
             Log::error('File upload error: ' . $e->getMessage());
             return response()->json(['error' => 'Failed to process file'], 500);
         }
     }
+
+
 
     /**
      * Generate a unique file name for storage
@@ -322,7 +322,7 @@ class FileUploadController extends Controller
             }
             
             // Get the absolute path for the temporary directory
-            $tempDir = storage_path('app/' . $uploadDirPath);
+            $tempDir = storage_path('fixonaut/' . $uploadDirPath);
 
             // Store metadata in cache (1 day expiration)
             $cacheKey = 'chunk_upload_' . $request->input('file_identifier');
@@ -504,6 +504,8 @@ class FileUploadController extends Controller
                 $chunkPath = $metadata['temp_dir'] . '/chunk_' . $i;
                 if (!file_exists($chunkPath)) {
                     fclose($combinedFile);
+                    $this->cleanupTempDirectory($metadata['temp_dir']);
+                    Cache::forget($cacheKey);
                     return response()->json(['error' => 'Chunk ' . $i . ' missing'], 400);
                 }
                 
@@ -511,6 +513,8 @@ class FileUploadController extends Controller
                 $chunkData = file_get_contents($chunkPath, false);
                 if ($chunkData === false) {
                     fclose($combinedFile);
+                    $this->cleanupTempDirectory($metadata['temp_dir']);
+                    Cache::forget($cacheKey);
                     return response()->json(['error' => 'Failed to read chunk ' . $i], 500);
                 }
                 
@@ -530,28 +534,25 @@ class FileUploadController extends Controller
             $validationResult = $this->validateFileByType($metadata['file_type'], $fileContent);
             if ($validationResult !== true) {
                 // Clean up on validation failure
-                unlink($combinedFilePath);
-                rmdir($metadata['temp_dir']);
+                $this->cleanupTempDirectory($metadata['temp_dir']);
                 Cache::forget($cacheKey);
                 
                 return response()->json(['error' => $validationResult], 400);
             }
-            
-            // Get file type directory
-            $fileTypeDir = $this->getStorageDirectoryByFileType($metadata['file_type']);
             
             // Generate a unique file name for storage
             $fileName = $this->generateUniqueFileName(
                 $metadata['site_url'],
                 $metadata['file_path'],
                 $metadata['file_type']
-            );
+            );  
             
-            // Store the final file in the proper location
-            $path = 'wordpress/' . $fileTypeDir . '/' . $this->getSiteFolderName($metadata['site_url']) . '/' . $fileName;
+            // Create consistent storage path: app/private/wordpress/site/files
+            $siteFolderName = $this->getSiteFolderName($metadata['site_url']);
+            $path = "wordpress/{$siteFolderName}/{$fileName}";
             
             // Ensure directory exists
-            $directory = dirname(storage_path('app/' . $path));
+            $directory = dirname(storage_path('app/private/' . $path));
             if (!file_exists($directory)) {
                 mkdir($directory, 0777, true);
             }
@@ -570,9 +571,12 @@ class FileUploadController extends Controller
             // Record the scan in the database
             $scan = $this->recordScan($scanRequest);
             
-            // Clean up
-            unlink($combinedFilePath);
-            rmdir($metadata['temp_dir']);
+            // Clean up the specific upload directory
+            $this->cleanupTempDirectory($metadata['temp_dir']);
+            
+            // Clean up all directories in chunk_uploads after successful finalization
+            $this->cleanupAllChunkUploads();
+            
             Cache::forget($cacheKey);
             
             return response()->json([
@@ -581,7 +585,7 @@ class FileUploadController extends Controller
                 'scan_id' => $scan->id,
                 'timestamp' => $scan->created_at,
                 'file_type' => $metadata['file_type'],
-                'storage_directory' => $fileTypeDir,
+                'file_path' => $path,
             ]);
             
         } catch (\Exception $e) {
@@ -666,9 +670,39 @@ class FileUploadController extends Controller
         foreach ($files as $file) {
             if (is_file($file)) {
                 unlink($file);
+            } elseif (is_dir($file)) {
+                // Recursively clean subdirectories if any
+                $this->cleanupTempDirectory($file);
             }
         }
         
+        // Remove the directory itself
         rmdir($tempDir);
+        
+        Log::info("Cleaned up temporary directory: {$tempDir}");
+    }
+    
+    /**
+     * Clean up all directories in the chunk_uploads folder
+     */
+    private function cleanupAllChunkUploads()
+    {
+        try {
+            $chunkUploadsPath = storage_path('fixonaut/temp/chunk_uploads');
+            
+            if (!file_exists($chunkUploadsPath)) {
+                return;
+            }
+            
+            $directories = glob($chunkUploadsPath . '/*', GLOB_ONLYDIR);
+            
+            foreach ($directories as $directory) {
+                $this->cleanupTempDirectory($directory);
+            }
+            
+            Log::info("Cleaned up all directories in chunk_uploads folder");
+        } catch (\Exception $e) {
+            Log::error("Error cleaning up chunk_uploads: " . $e->getMessage());
+        }
     }
 }

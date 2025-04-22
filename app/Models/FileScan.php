@@ -19,6 +19,8 @@ class FileScan extends Model
         'theme',
         'file_path',
         'file_type',
+        'file_size',
+        'scan_date',
         'scan_date',
         'issues_found',
         'status',
