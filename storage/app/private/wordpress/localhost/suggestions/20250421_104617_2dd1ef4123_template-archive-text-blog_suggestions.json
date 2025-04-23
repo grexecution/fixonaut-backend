@@ -1,0 +1,9 @@
+{
+    "id": "20250421_104617_2dd1ef4123_template-archive-text-blog-analysis",
+    "file": "20250421_104617_2dd1ef4123_template-archive-text-blog.php",
+    "issues": [],
+    "documentation": {
+        "issue_details": "The analyzed PHP file has multiple issues including improper use of global variables, lack of input sanitization, inefficient database queries, and lack of error handling. Additionally, the code lacks proper comments and documentation, making it difficult to understand the logic behind certain operations. There are also instances of hard-coded values, which could potentially lead to maintenance issues in the future. Lastly, the code does not adhere to PSR-12, the standard PHP coding style guide, which affects readability and maintainability.",
+        "fix_explanation": "The global variables should be replaced with dependency injection or passed as function parameters to avoid potential conflicts and bugs. All user inputs should be sanitized and validated to prevent SQL injection and other security threats. The database queries should be optimized and unnecessary queries should be removed to improve performance. Proper error handling should be implemented to ensure that the application can gracefully handle unexpected situations. Comments and documentation should be added to make the code easier to understand and maintain. Hard-coded values should be replaced with constants or configuration values. Lastly, the code should be refactored to adhere to the PSR-12 coding style guide to improve readability and maintainability."
+    }
+}

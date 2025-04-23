@@ -92,19 +92,20 @@ class OpenAITestController extends Controller
                     }
                     
                     try {
+
                         // Read file content
                         $fileContent = Storage::get($filePath);
                         $fileSize = strlen($fileContent);
                         
-                        // $fileScan = FileScan::create([
-                        //     'site_url' => 'https://test.example.com',
-                        //     'theme' => basename($directory),
-                        //     'file_path' => $filePath,
-                        //     'file_type' => strtolower($extension),
-                        //     'file_size' => $fileSize,
-                        //     'scan_date' => now(),
-                        //     'status' => 'pending'
-                        // ]);
+                        $fileScan = FileScan::create([
+                            'site_url' => 'https://test.example.com',
+                            'theme' => basename($directory),
+                            'file_path' => $filePath,
+                            'file_type' => strtolower($extension),
+                            'file_size' => $fileSize,
+                            'scan_date' => now(),
+                            'status' => 'pending'
+                        ]);
 
                         // Process file using OpenAIService with chunking
                         $fileContent = Storage::get($filePath);
@@ -113,13 +114,30 @@ class OpenAITestController extends Controller
                         $chunkSize = 2000;
                         $chunks = $this->chunkCode($fileContent, $chunkSize);
                         $chunkAnalyses = [];
-                        $processResult = ['status' => 'success', 'message' => '', 'suggestions' => []];
+                        
+                        // Define our initial JSON structure for suggestions
+                        $issuesJson = [
+                            'id' => basename($filePath, '.' . $extension) . '-analysis',
+                            'file' => basename($filePath),
+                            'issues' => [],
+                            'documentation' => [
+                                'issue_details' => '',
+                                'fix_explanation' => ''
+                            ]
+                        ];
 
                         // Process each chunk
                         foreach ($chunks as $index => $chunk) {
-                            $chunkPrompt = "Analyze this code chunk ({$index}/{count($chunks)}):\n\n```{$fileScan->file_type}\n{$chunk}\n```\n\n"
-                                . "Identify issues related to: security vulnerabilities, performance problems, code quality, and best practices. "
-                                . "Score this chunk from 0-100 and explain your reasoning.";
+                            $totalChunks = count($chunks);
+                            $currentChunkNumber = $index + 1;
+                            $chunkPrompt = "Analyze this {$fileScan->file_type} code chunk ({$currentChunkNumber}/{$totalChunks}). Identify ONLY specific issues present in this chunk. Return valid JSON with an 'issues' array that includes:\n"
+                                . "1. location: {line_number} or {start_line}-{end_line} with exact code snippet from this chunk\n"
+                                . "2. issue: concise description of the actual problem in the code\n"
+                                . "3. fix_suggestion: complete replacement code that resolves the issue\n" 
+                                . "4. auto_fixable: 'yes' (direct replacement), 'semi' (needs review), or 'no' (manual fix required)\n"
+                                . "5. apply_method: 'replace_lines' or 'modify_lines' with clear boundaries\n\n"
+                                . "Important: Do NOT invent issues. Only flag actual problems. Do NOT assume methods are missing if they might be defined elsewhere in the project. If no issues found, return {\"issues\": []}.\n\n"
+                                . "Here's the code to analyze:\n```{$fileScan->file_type}\n{$chunk}\n```";
                             
                             $chunkResponse = Http::withHeaders([
                                 'Authorization' => 'Bearer ' . $this->apiKey,
@@ -129,32 +147,50 @@ class OpenAITestController extends Controller
                                 'messages' => [
                                     [
                                         'role' => 'system',
-                                        'content' => "You are a code review expert specializing in {$fileScan->file_type}. Provide clear and specific feedback."
+                                        'content' => "You are a code review expert specializing in {$fileScan->file_type}. Provide clear and specific feedback in valid JSON format only. Each issue must include location, issue description, fix_suggestion, auto_fixable status, and apply_method."
                                     ],
                                     ['role' => 'user', 'content' => $chunkPrompt]
                                 ],
                                 'temperature' => 0.3,
                                 'max_tokens' => 1000,
                             ]);
-
-
-        
                             
                             if ($chunkResponse->successful()) {
-                                $chunkAnalyses[] = $chunkResponse->json()['choices'][0]['message']['content'];
+                                $responseContent = $chunkResponse->json()['choices'][0]['message']['content'];
+                                
+                                // Extract JSON from response (in case it's wrapped in markdown code blocks)
+                                if (preg_match('/```(?:json)?(.*?)```/s', $responseContent, $matches)) {
+                                    $jsonContent = trim($matches[1]);
+                                } else {
+                                    $jsonContent = trim($responseContent);
+                                }
+                                
+                                // Parse and validate JSON
+                                try {
+                                    $jsonData = json_decode($jsonContent, true);
+                                    if (json_last_error() === JSON_ERROR_NONE && isset($jsonData['issues'])) {
+                                        // Valid JSON with issues array
+                                        $chunkAnalyses[] = $jsonData;
+                                        
+                                        // Add issues to our main JSON structure
+                                        foreach ($jsonData['issues'] as $issue) {
+                                            $issuesJson['issues'][] = $issue;
+                                        }
+                                    }
+                                } catch (\Exception $e) {
+                                    Log::error("Error parsing JSON from chunk {$index}: " . $e->getMessage());
+                                }
                             }
                         }
 
-                        // Global review based on chunk analyses
+                        // Global review to consolidate all issues
                         if (!empty($chunkAnalyses)) {
-                            $globalPrompt = "You've analyzed multiple chunks of a {$fileScan->file_type} file. Here are the chunk analyses:\n\n" 
-                                . implode("\n\n----------\n\n", $chunkAnalyses) 
-                                . "\n\nProvide a comprehensive global review of the entire file addressing:\n"
-                                . "1. Overall code score (0-100)\n"
-                                . "2. Key improvements needed\n"
-                                . "3. Critical errors or vulnerabilities\n"
-                                . "4. Best practices recommendations\n"
-                                . "Focus on actionable feedback that would most improve this code.";
+                            $globalPrompt = "You've analyzed multiple chunks of a {$fileScan->file_type} file and identified various issues. "
+                                . "Create a comprehensive summary for the documentation section of our analysis JSON. "
+                                . "The summary should include:\n"
+                                . "1. A general overview of issues found (issue_details)\n"
+                                . "2. General explanation of the fix approach (fix_explanation)\n"
+                                . "Please format your response as valid JSON with these two fields only.";
                             
                             $globalResponse = Http::withHeaders([
                                 'Authorization' => 'Bearer ' . $this->apiKey,
@@ -169,16 +205,36 @@ class OpenAITestController extends Controller
                                     ['role' => 'user', 'content' => $globalPrompt]
                                 ],
                                 'temperature' => 0.3,
-                                'max_tokens' => 2000,
+                                'max_tokens' => 1000,
                             ]); 
                             
                             if ($globalResponse->successful()) {
-                                $globalAnalysis = $globalResponse->json()['choices'][0]['message']['content'];
+                                $globalContent = $globalResponse->json()['choices'][0]['message']['content'];
                                 
-
-                              
-
-                                // Save the suggestion
+                                // Extract JSON from response
+                                if (preg_match('/```(?:json)?(.*?)```/s', $globalContent, $matches)) {
+                                    $jsonContent = trim($matches[1]);
+                                } else {
+                                    $jsonContent = trim($globalContent);
+                                }
+                                
+                                // Parse and validate JSON
+                                try {
+                                    $docData = json_decode($jsonContent, true);
+                                    if (json_last_error() === JSON_ERROR_NONE) {
+                                        // Add documentation to our main JSON structure
+                                        if (isset($docData['issue_details'])) {
+                                            $issuesJson['documentation']['issue_details'] = $docData['issue_details'];
+                                        }
+                                        if (isset($docData['fix_explanation'])) {
+                                            $issuesJson['documentation']['fix_explanation'] = $docData['fix_explanation'];
+                                        }
+                                    }
+                                } catch (\Exception $e) {
+                                    Log::error("Error parsing documentation JSON: " . $e->getMessage());
+                                }
+                                
+                                // Save the JSON suggestion
                                 $filePathInfo = pathinfo($filePath);
                                 $suggestionsDir = $filePathInfo['dirname'] . '/suggestions';
                               
@@ -186,13 +242,34 @@ class OpenAITestController extends Controller
                                     Storage::makeDirectory($suggestionsDir);
                                 }
                                 
-                                $suggestionFilePath = $suggestionsDir . '/' . $filePathInfo['filename'] . '_suggestions.txt';
-                                Storage::put($suggestionFilePath, $globalAnalysis);
+                                $suggestionFilePath = $suggestionsDir . '/' . $filePathInfo['filename'] . '_suggestions.json';
+                                Storage::put($suggestionFilePath, json_encode($issuesJson, JSON_PRETTY_PRINT));
+                               
+                                // Create a FileSuggestion record
+                                try {
+                                    $result = FileSuggestion::create([
+                                        'file_scan_id' => $fileScan->id,
+                                        'file_path' => $filePath,
+                                        'suggestion' => json_encode($issuesJson),
+                                        'status' => 'processed',
+                                        'ai_model' => $this->model,
+                                        'metadata' => json_encode([
+                                            'suggestion_file_path' => $suggestionFilePath,
+                                            'issues_count' => count($issuesJson['issues'])
+                                        ])
+                                    ]);
+                                    
+                                    if (!$result) {
+                                        Log::error("Failed to create FileSuggestion record for file: {$filePath}");
+                                    }
+                                } catch (\Exception $e) {
+                                    Log::error("Exception creating FileSuggestion: " . $e->getMessage());
+                                }
                         
                                 $processResult = [
                                     'status' => 'success',
                                     'message' => 'File processed successfully',
-                                    'suggestions' => [$globalAnalysis]
+                                    'issues_count' => count($issuesJson['issues'])
                                 ];
                                 
                                 // Update file scan status
@@ -212,16 +289,10 @@ class OpenAITestController extends Controller
                             $fileScan->update(['status' => 'failed']);
                         }
 
-                        die();
-
-                        // // Process file using OpenAIService
-                        // $processResult = $this->openAIService->processFile($fileScan);
-
-                        
                         $results['processed_files'][] = [
                             'path' => $filePath,
                             'status' => $processResult['status'],
-                            'suggestions_count' => isset($processResult['suggestions']) ? count($processResult['suggestions']) : 0
+                            'issues_count' => $processResult['issues_count'] ?? 0
                         ];
                         
                     } catch (Exception $e) {
