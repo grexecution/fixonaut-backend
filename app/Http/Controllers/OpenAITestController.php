@@ -130,14 +130,18 @@ class OpenAITestController extends Controller
                         foreach ($chunks as $index => $chunk) {
                             $totalChunks = count($chunks);
                             $currentChunkNumber = $index + 1;
-                            $chunkPrompt = "Analyze this {$fileScan->file_type} code chunk ({$currentChunkNumber}/{$totalChunks}). Identify ONLY specific issues present in this chunk. Return valid JSON with an 'issues' array that includes:\n"
-                                . "1. location: {line_number} or {start_line}-{end_line} with exact code snippet from this chunk\n"
+                            $startLine = $chunk['start_line'];
+                            $endLine = $chunk['end_line'];
+                            $chunkContent = $chunk['content'];
+                            
+                            $chunkPrompt = "Analyze this {$fileScan->file_type} code chunk ({$currentChunkNumber}/{$totalChunks}). This chunk spans from line {$startLine} to {$endLine} in the original file. Identify ONLY specific issues present in this chunk. Return valid JSON with an 'issues' array that includes:\n"
+                                . "1. location: {line_number} or {start_line}-{end_line} - MUST USE ABSOLUTE line numbers from the original file\n"
                                 . "2. issue: concise description of the actual problem in the code\n"
                                 . "3. fix_suggestion: complete replacement code that resolves the issue\n" 
                                 . "4. auto_fixable: 'yes' (direct replacement), 'semi' (needs review), or 'no' (manual fix required)\n"
                                 . "5. apply_method: 'replace_lines' or 'modify_lines' with clear boundaries\n\n"
                                 . "Important: Do NOT invent issues. Only flag actual problems. Do NOT assume methods are missing if they might be defined elsewhere in the project. If no issues found, return {\"issues\": []}.\n\n"
-                                . "Here's the code to analyze:\n```{$fileScan->file_type}\n{$chunk}\n```";
+                                . "Here's the code to analyze:\n```{$fileScan->file_type}\n{$chunkContent}\n```";
                             
                             $chunkResponse = Http::withHeaders([
                                 'Authorization' => 'Bearer ' . $this->apiKey,
@@ -147,7 +151,7 @@ class OpenAITestController extends Controller
                                 'messages' => [
                                     [
                                         'role' => 'system',
-                                        'content' => "You are a code review expert specializing in {$fileScan->file_type}. Provide clear and specific feedback in valid JSON format only. Each issue must include location, issue description, fix_suggestion, auto_fixable status, and apply_method."
+                                        'content' => "You are a code review expert specializing in {$fileScan->file_type}. Provide clear and specific feedback in valid JSON format only. Each issue must include location, issue description, fix_suggestion, auto_fixable status, and apply_method. Always use ABSOLUTE line numbers (from the original file) when reporting issue locations."
                                     ],
                                     ['role' => 'user', 'content' => $chunkPrompt]
                                 ],
@@ -172,9 +176,42 @@ class OpenAITestController extends Controller
                                         // Valid JSON with issues array
                                         $chunkAnalyses[] = $jsonData;
                                         
-                                        // Add issues to our main JSON structure
+                                        // Add issues to our main JSON structure with validation for proper line numbers
                                         foreach ($jsonData['issues'] as $issue) {
-                                            $issuesJson['issues'][] = $issue;
+                                            // Validate location to ensure it's using absolute line numbers
+                                            if (isset($issue['location'])) {
+                                                // Check if location is within the current chunk's range
+                                                $locationValid = true;
+                                                
+                                                if (is_numeric($issue['location'])) {
+                                                    // Single line number
+                                                    $lineNum = (int)$issue['location'];
+                                                    if ($lineNum < $chunk['start_line'] || $lineNum > $chunk['end_line']) {
+                                                        $locationValid = false;
+                                                        Log::warning("Issue location outside of chunk range: Line {$lineNum} not in range {$chunk['start_line']}-{$chunk['end_line']}");
+                                                    }
+                                                } elseif (preg_match('/(\d+)-(\d+)/', $issue['location'], $matches)) {
+                                                    // Line range
+                                                    $startIssue = (int)$matches[1];
+                                                    $endIssue = (int)$matches[2];
+                                                    
+                                                    // Allow some flexibility but issue should at least partially overlap with chunk
+                                                    if ($endIssue < $chunk['start_line'] || $startIssue > $chunk['end_line']) {
+                                                        $locationValid = false;
+                                                        Log::warning("Issue location outside of chunk range: Lines {$startIssue}-{$endIssue} not overlapping with {$chunk['start_line']}-{$chunk['end_line']}");
+                                                    }
+                                                }
+                                                
+                                                if ($locationValid) {
+                                                    // Ensure the issue has all required fields
+                                                    if (isset($issue['issue']) && isset($issue['fix_suggestion']) && 
+                                                        isset($issue['auto_fixable']) && isset($issue['apply_method'])) {
+                                                        $issuesJson['issues'][] = $issue;
+                                                    } else {
+                                                        Log::warning("Issue missing required fields: " . json_encode($issue));
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 } catch (\Exception $e) {
@@ -217,6 +254,11 @@ class OpenAITestController extends Controller
                                 } else {
                                     $jsonContent = trim($globalContent);
                                 }
+
+                                echo "<pre>";
+                                print_r($jsonContent);
+                                echo "</pre>";  
+                                die();
                                 
                                 // Parse and validate JSON
                                 try {
@@ -577,17 +619,23 @@ class OpenAITestController extends Controller
     }
 
     /**
-     * Split file content into chunks of specified size
+     * Split file content into chunks of specified size while preserving line number information
      *
      * @param string $content The file content to chunk
      * @param int $chunkSize The approximate size of each chunk
-     * @return array An array of content chunks
+     * @return array An array of chunks with content and line number info
      */
     protected function chunkCode($content, $chunkSize)
     {
         // If content is small enough, return as a single chunk
         if (strlen($content) <= $chunkSize) {
-            return [$content];
+            return [
+                [
+                    'content' => $content,
+                    'start_line' => 1,
+                    'end_line' => substr_count($content, "\n") + 1
+                ]
+            ];
         }
         
         // Split by newlines
@@ -596,26 +644,38 @@ class OpenAITestController extends Controller
         $chunks = [];
         $currentChunk = "";
         $currentSize = 0;
+        $startLine = 1;
+        $currentLine = 1;
         
         foreach ($lines as $line) {
             $lineSize = strlen($line);
             
             // If adding this line would exceed chunk size, start a new chunk
-            if ($currentSize + $lineSize > $chunkSize) {
-                if (!empty($currentChunk)) {
-                    $chunks[] = $currentChunk;
-                }
+            if ($currentSize + $lineSize > $chunkSize && !empty($currentChunk)) {
+                $chunks[] = [
+                    'content' => $currentChunk,
+                    'start_line' => $startLine,
+                    'end_line' => $currentLine - 1
+                ];
+                
                 $currentChunk = $line;
                 $currentSize = $lineSize;
+                $startLine = $currentLine;
             } else {
                 $currentChunk .= (!empty($currentChunk) ? "\n" : "") . $line;
                 $currentSize += $lineSize;
             }
+            
+            $currentLine++;
         }
         
         // Add the last chunk if not empty
         if (!empty($currentChunk)) {
-            $chunks[] = $currentChunk;
+            $chunks[] = [
+                'content' => $currentChunk,
+                'start_line' => $startLine,
+                'end_line' => $currentLine - 1
+            ];
         }
         
         return $chunks;

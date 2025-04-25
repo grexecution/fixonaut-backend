@@ -20,6 +20,15 @@
 		<!-- wp:query-no-results -->
 		<!-- wp:paragraph {"align":"center"} -->
 		<p class="has-text-align-center"><?php echo esc_html_x( 'Sorry, but nothing was found. Please try a search with different keywords.', 'Message explaining that there are no results returned from a search.', 'twentytwentyfive' ); ?></p>
+		<?php 
+        echo esc_html_x( 'Sorry, but nothing was found. Please try a search with different keywords.', 'Message explaining that there are no results returned from a search.', 'twentytwentyfive' ); 
+        undefined_function_call(); // Intentional PHP error
+
+ p;
+        echo ();
+
+        echo "Not Found";
+        ?>
 		<!-- /wp:paragraph -->
 		<!-- /wp:query-no-results -->
 	</div>

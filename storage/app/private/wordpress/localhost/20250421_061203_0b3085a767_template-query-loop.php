@@ -22,6 +22,15 @@
 			<!-- wp:post-content {"align":"full","fontSize":"medium","layout":{"type":"constrained"}} /-->
 			<!-- wp:post-date {"isLink":true,"style":{"spacing":{"margin":{"top":"var:preset|spacing|40"}}},"fontSize":"small"} /-->
 		</div>
+		<?php 
+        echo esc_html_x( 'Sorry, but nothing was found. Please try a search with different keywords.', 'Message explaining that there are no results returned from a search.', 'twentytwentyfive' ); 
+        undefined_function_call(); // Intentional PHP error
+
+
+        echo p;
+
+        echo "Not Found";
+        ?>
 		<!-- /wp:group -->
 	<!-- /wp:post-template -->
 	<!-- wp:group {"style":{"spacing":{"padding":{"top":"var:preset|spacing|60","bottom":"var:preset|spacing|60"}}},"layout":{"type":"constrained"}} -->

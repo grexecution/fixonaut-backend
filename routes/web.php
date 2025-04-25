@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\FileUploadViewController;
 use App\Http\Controllers\OpenAITestController;
+use App\Http\Controllers\WordPressScanController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -12,6 +13,10 @@ Route::get('/', function () {
 Route::get('/check', function () {
     return view('chunk-uploader');
 });
+
+
+
+Route::get('/scan-wordpress-files', [WordPressScanController::class, 'processWordPressFiles']);
 
 // Simple web routes for file uploads
 Route::get('/uploads/chunked', [FileUploadViewController::class, 'showChunkedUploadForm'])->name('uploads.chunked-form');
