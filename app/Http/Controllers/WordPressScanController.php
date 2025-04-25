@@ -27,7 +27,7 @@ class WordPressScanController extends Controller
         // --- Configuration ---
         $wordpressDir = 'wordpress';
         $openaiApiKey = config('services.openai.api_key');
-        $openaiModel = config('services.openai.model', 'gpt-4-turbo');
+        $openaiModel = config('services.openai.model', 'gpt-4.1');
         $maxLinesPerChunk = 100;
         $siteUrl = $request->input('site_url', 'http://localhost');
 
@@ -365,8 +365,8 @@ class WordPressScanController extends Controller
              . "**Code Chunk to Analyze (File: '{$filePath}', Lines {$startLine}-{$endLine} absolute):**\n```{$extension}\n{$chunkContent}\n```";
          // --- END REVISED PROMPT ---
 
-            echo '<pre style="color: black;">' . htmlspecialchars($chunkPrompt) . '</pre>';
-            die();
+            // echo '<pre style="color: black;">' . htmlspecialchars($chunkPrompt) . '</pre>';
+            // die();
 
 
         try {
@@ -385,11 +385,12 @@ class WordPressScanController extends Controller
                 ],
                 'temperature' => 0.1, // Slightly adjusted temperature
                 'max_tokens' => 2500, // Increased max_tokens slightly
-                'response_format' => ['type' => 'json_object'],
+                //'response_format' => ['type' => 'json_object'],
             ]);
 
             if ($response->failed()) {
-                Log::error("OpenAI API request failed for chunk {$startLine}-{$endLine} of {$filePath}. Status: " . $response->status() . ". Body: " . $response->body());
+                $errorBody = $response->body(); // Get the response body
+                Log::error("OpenAI API request failed for chunk {$startLine}-{$endLine} of {$filePath}. Status: " . $response->status() . ". Body: " . $errorBody);
                 // Consider if this should be a critical failure or just skip the chunk
                 return []; // Non-critical: return empty issues for this chunk
                 // return false; // Critical: fail the entire file processing
@@ -397,9 +398,6 @@ class WordPressScanController extends Controller
 
             $responseContent = $response->body();
 
-            echo "<pre>";
-            print_r($responseContent);
-            die();
 
             // Attempt to decode JSON
             try {
