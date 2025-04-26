@@ -1,0 +1,47 @@
+{
+    "id": "20250421_061110_d844185169_template-query-loop-photo-blog-analysis-1745655461",
+    "file": "20250421_061110_d844185169_template-query-loop-photo-blog.php",
+    "full_path": "wordpress/localhost/20250421_061110_d844185169_template-query-loop-photo-blog.php",
+    "issues": [
+        {
+            "original_code_snippet": "undefined_function_call(); // Intentional PHP error",
+            "issue": "Call to undefined function 'undefined_function_call'.",
+            "severity": "Critical",
+            "fix_suggestion": "// undefined_function_call(); // Intentional PHP error",
+            "auto_fixable": "yes",
+            "apply_method": "replace_lines",
+            "location": 26
+        },
+        {
+            "original_code_snippet": "echo ();",
+            "issue": "Invalid syntax for 'echo' statement. 'echo' requires at least one argument.",
+            "severity": "Critical",
+            "fix_suggestion": "// echo ();",
+            "auto_fixable": "yes",
+            "apply_method": "replace_lines",
+            "location": 28
+        },
+        {
+            "original_code_snippet": "echo \"Not Found\";",
+            "issue": "Potential Cross-Site Scripting (XSS) risk due to unescaped output.",
+            "severity": "High",
+            "fix_suggestion": "echo esc_html( 'Not Found' );",
+            "auto_fixable": "yes",
+            "apply_method": "replace_lines",
+            "location": 30
+        },
+        {
+            "original_code_snippet": "p;",
+            "issue": "Invalid PHP syntax. 'p;' is not a valid PHP statement.",
+            "severity": "Critical",
+            "fix_suggestion": "// p;",
+            "auto_fixable": "yes",
+            "apply_method": "replace_lines",
+            "location": 27
+        }
+    ],
+    "documentation": {
+        "issue_details": "Analysis complete. Review individual issues.",
+        "fix_explanation": "Apply fixes based on individual issue suggestions and severity."
+    }
+}
