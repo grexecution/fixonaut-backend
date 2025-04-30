@@ -37,7 +37,15 @@ class FileScan extends Model
         'processed_at' => 'datetime',
         'issues_found' => 'array',
     ];
-    
+
+    /**
+     * Get the suggestion associated with the file scan.
+     */
+    public function suggestion()
+    {
+        return $this->hasOne(FileSuggestion::class);
+    }
+
     /**
      * Get the files for this scan.
      */

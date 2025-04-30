@@ -13,6 +13,7 @@ use JsonException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Carbon\Carbon; // Needed for timestamp comparison if using scan_date
+use Illuminate\Support\Facades\DB; // Import DB facade for subquery
 
 class WordPressScanController extends Controller
 {
@@ -185,6 +186,11 @@ class WordPressScanController extends Controller
                         'issues_count' => $processResult['issues_count'] ?? 0,
                         'suggestion_path' => $processResult['suggestion_path'] ?? null
                     ];  
+
+
+                    echo "<pre>";
+                    print_r($results['processed_files']);
+                    die();
                     
 
                 } catch (Exception $e) {
@@ -206,6 +212,8 @@ class WordPressScanController extends Controller
                         }
                     }
                 }
+
+
             } // End foreach file
 
             Log::info("WordPress file processing finished. Processed: {$processedCount}, Skipped (unchanged): {$skippedCount}.");
@@ -342,7 +350,7 @@ class WordPressScanController extends Controller
                     . "**Output Requirements:**\n"
                     . "Return your findings ONLY as a single, valid JSON object. This object must have a root key named 'issues', which is an array of issue objects. If no issues are found, return `{\"issues\": []}`.\n"
                     . "Each issue object within the 'issues' array MUST contain exactly these fields in this specific order:\n" // Added order requirement
-                    . "  1.  `relative_line`: (integer or string \"start-end\") - The 1-based line number(s) where the issue *starts* or occurs, RELATIVE TO THE START OF THE PROVIDED CHUNK. The first line of the chunk is line 1. Use a string like `\"start-end\"` (e.g., `\"3-5\"`) for multi-line issues.\n"
+                    . "  1.  `relative_line`: (integer or string \"start-end\") - The 1-based line number(s) where the issue *starts* or occurs, RELATIVE TO THE START OF THE PROVIDED CHUNK. The first line of the chunk is line 1. Use a string like `\"3-5\"` (e.g., `\"3-5\"`) for multi-line issues.\n"
                     . "  2.  `original_code_snippet`: (string) The exact, unmodified line(s) of code from the input chunk, identified by `relative_line`, that contain the reported issue. If `relative_line` is a range, include all lines in that range, preserving original indentation and newlines.\n"
                     . "  3.  `issue`: (string) A concise, specific description of the identified problem.\n"
                     . "  4.  `severity`: (string) Classify the severity: 'Critical' (e.g., PHP syntax/fatal errors, major security flaws), 'High' (e.g., undefined functions, potential XSS), 'Medium' (e.g., deprecated functions, moderate logic issues), 'Low' (e.g., coding standards), or 'Info' (e.g., minor suggestions).\n"
@@ -632,5 +640,51 @@ class WordPressScanController extends Controller
             'suggestion_path' => $suggestionFilePath // Return relative path
         ];
     }
+
+    /**
+     * API endpoint to retrieve the latest completed FileScan for each file_path
+     * associated with a given site_url, along with its FileSuggestion.
+     */
+    public function getLatestScansWithSuggestions(Request $request): JsonResponse
+    {
+        $request->validate([
+            'site_url' => 'required|url' // Validate site_url input
+        ]);
+
+        $siteUrl = $request->input('site_url');
+
+        try {
+            $latestScanIdsSubquery = FileScan::selectRaw('MAX(id) as max_id')
+                ->where('site_url', $siteUrl)
+                // ->where('status', 'completed') // Optional: Only fetch completed scans
+                ->groupBy('file_path');
+
+            $latestScans = FileScan::select('file_scans.*') // Explicitly select FileScan columns
+                ->with(['suggestion' => function($query) {
+                    $query->select('id', 'file_scan_id', 'status', 'metadata', 'ai_model') // Exclude file_path from suggestion
+                          ->addSelect('suggestion'); // Add other needed columns
+                }])
+                ->joinSub($latestScanIdsSubquery, 'latest_scans', function ($join) {
+                    $join->on('file_scans.id', '=', 'latest_scans.max_id');
+                })
+                ->orderBy('file_scans.scan_date', 'desc') // Order the results
+                ->get();
+
+            return response()->json([
+                'status' => 'success',
+                'site_url' => $siteUrl,
+                'data' => $latestScans
+            ]);
+
+        } catch (Exception $e) {
+            Log::error("Error retrieving latest scans for site_url {$siteUrl}: " . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to retrieve latest scans.',
+                'error' => $e->getMessage() // Provide error details in non-production environments
+            ], 500);
+        }
+    }
+
 
 } // End of Controller Class

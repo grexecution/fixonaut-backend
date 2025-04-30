@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\Api\FileScanController;
+use App\Http\Controllers\WordPressScanController; // Import the controller
 
 /*
 |--------------------------------------------------------------------------
@@ -39,3 +40,13 @@ Route::post('/files/scan/retry', [FileScanController::class, 'retrySuggestions']
 //     Route::post('files/upload/finalize', [FileUploadController::class, 'finalizeChunkUpload']);
 //     Route::post('files/upload/abort', [FileUploadController::class, 'abortChunkUpload']);
 // });
+
+Route::get('/user', function (Request $request) {
+    return $request->user();
+})->middleware('auth:sanctum');
+
+// Route to trigger the WordPress file scan process
+Route::post('/scan-wordpress', [WordPressScanController::class, 'processWordPressFiles']);
+
+// New route to get the latest scans with suggestions per site_url
+Route::get('/latest-scans', [WordPressScanController::class, 'getLatestScansWithSuggestions']);
