@@ -190,7 +190,7 @@ class WordPressScanController extends Controller
 
                     echo "<pre>";
                     print_r($results['processed_files']);
-                    die();
+                    die(); 
                     
 
                 } catch (Exception $e) {

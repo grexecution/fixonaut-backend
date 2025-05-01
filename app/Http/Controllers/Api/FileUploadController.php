@@ -111,7 +111,8 @@ class FileUploadController extends Controller
             $sanitizedPath = preg_replace('/\.' . preg_quote($fileExtension, '/') . '$/', '', $sanitizedPath);
             
             // Return with proper extension
-            return $timestamp . '_' . $uniqueId . '_' . $sanitizedPath . '.' . $fileExtension;
+            //return $timestamp . '_' . $uniqueId . '_' . $sanitizedPath . '.' . $fileExtension;
+            return  $sanitizedPath . '.' . $fileExtension;
         }
         
         // Map image file types to proper extensions
@@ -132,14 +133,17 @@ class FileUploadController extends Controller
             
             // If it's an image type, use the mapped extension
             if (array_key_exists($normalizedFileType, $imageExtensionMap)) {
-                return $timestamp . '_' . $uniqueId . '_' . $sanitizedPath . '.' . $imageExtensionMap[$normalizedFileType];
+                //return $timestamp . '_' . $uniqueId . '_' . $sanitizedPath . '.' . $imageExtensionMap[$normalizedFileType];
+                return $sanitizedPath . '.' . $imageExtensionMap[$normalizedFileType];
             } else {
-                return $timestamp . '_' . $uniqueId . '_' . $sanitizedPath . '.' . $fileType;
+                //return $timestamp . '_' . $uniqueId . '_' . $sanitizedPath . '.' . $fileType;
+                return $sanitizedPath . '.' . $fileType;
             }
         }
         
         // Default fallback (should rarely hit this)
-        return $timestamp . '_' . $uniqueId . '_' . $sanitizedPath;
+        //return $timestamp . '_' . $uniqueId . '_' . $sanitizedPath;
+        return  $sanitizedPath; 
     }
 
     /**
