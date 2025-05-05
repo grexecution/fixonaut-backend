@@ -50,3 +50,7 @@ Route::post('/scan-wordpress', [WordPressScanController::class, 'processWordPres
 
 // New route to get the latest scans with suggestions per site_url
 Route::get('/latest-scans', [WordPressScanController::class, 'getLatestScansWithSuggestions']);
+
+// New route for SEO analysis of WordPress post content
+Route::post('/analyze-seo', [WordPressScanController::class, 'analyzePostForSEO']);
+

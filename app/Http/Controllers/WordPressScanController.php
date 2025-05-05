@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use App\Models\FileScan;       // Make sure this model exists
 use App\Models\FileSuggestion; // Make sure this model exists
+use App\Services\OpenAIService; // Ensure OpenAIService is imported
 use Exception;
 use JsonException;
 use Illuminate\Http\Client\ConnectionException;
@@ -190,7 +191,7 @@ class WordPressScanController extends Controller
 
                     echo "<pre>";
                     print_r($results['processed_files']);
-                    die(); 
+                    die();     
                     
 
                 } catch (Exception $e) {
@@ -303,71 +304,95 @@ class WordPressScanController extends Controller
      */
     private function analyzeChunk(array $chunk, string $filePath, string $extension, string $apiKey, string $model): array | false
     {
+
+
         $chunkContent = $chunk['content'];
         $startLine = $chunk['start_line']; // Absolute start line of chunk
         $endLine = $chunk['end_line'];     // Absolute end line of chunk
         $chunkLineCount = $chunk['line_count']; // Lines in *this* chunk
         $validatedIssues = [];
 
-        // Prompt asking for RELATIVE line numbers within the chunk
-        // $chunkPrompt = "Analyze this {$extension} code chunk from file '{$filePath}'. "
-        //     . "This chunk represents lines {$startLine} to {$endLine} of the original file. "
-        //     . "Identify ONLY specific issues present *within this chunk*. "
-        //     . "Return valid JSON with an 'issues' array. Each issue object MUST include:\n"
-        //     . "1. relative_line: {line_number} or {start_line}-{end_line} - Line number(s) RELATIVE TO THE START OF *THIS* CHUNK (starting from 1).\n"
-        //     . "2. issue: Concise description of the actual problem.\n"
-        //     . "3. severity: 'Critical', 'High', 'Medium', 'Low', or 'Info'.\n" // Added severity
-        //     . "4. fix_suggestion: Complete replacement code for the problematic line(s), or detailed steps if not a direct replacement.\n"
-        //     . "5. auto_fixable: 'yes' (direct replacement), 'semi' (needs review), or 'no' (manual fix required).\n"
-        //     . "6. apply_method: 'replace_lines' or 'modify_lines'.\n\n"
-        //     . "Important: ONLY flag actual problems within this specific chunk. Do NOT invent issues. If no issues found, return {\"issues\": []}.\n\n"
-        //     . "Code chunk (Lines {$startLine}-{$endLine} absolute):\n```{$extension}\n{$chunkContent}\n```";
-
          // Contextual Information
          $currentUtcTime = gmdate('Y-m-d H:i:s'); 
          $currentUser = 'codestertech'; 
 
-        
-        $chunkPrompt = "Analyze the following code chunk provided by user '{$currentUser}' at {$currentUtcTime} UTC. "
-                    . "The chunk originates from the file '{$filePath}' within a WordPress theme directory. This file likely contains a mix of PHP, HTML (including WordPress Gutenberg block comments like `<!-- wp:... -->`), possibly JavaScript, and CSS.\n\n"
-                    . "This specific chunk represents lines {$startLine} to {$endLine} of the original file.\n\n"
-                    . "**Your primary goal is to meticulously identify specific errors and violations *strictly within this chunk*. Pay critical attention to the following categories:**\n"
-                    . "  1.  **PHP Errors (Highest Priority):**\n"
-                    . "      *   Syntax Errors (Parse errors, unexpected tokens, missing semicolons/brackets, etc.).\n"
-                    . "      *   Runtime Errors (Calls to undefined functions/methods, incorrect arguments to built-in functions, fatal errors like `echo ();`).\n"
-                    . "      *   Logical Errors visible solely within the chunk.\n"
-                    . "  2.  **Security Vulnerabilities:**\n"
-                    . "      *   Improper Output Escaping: Identify any PHP variables echoed or printed within HTML context without appropriate WordPress escaping functions (e.g., `esc_html`, `esc_attr`, `esc_url`, `wp_kses_post`). Flag potential Cross-Site Scripting (XSS) risks.\n"
-                    . "      *   Missing Nonces/Capability Checks *if relevant actions (like form processing hints) are visible within the chunk*.\n"
-                    . "  3.  **WordPress Specific Issues:**\n"
-                    . "      *   Use of deprecated WordPress functions, hooks, or parameters.\n"
-                    . "      *   Violations of WordPress Coding Standards (naming conventions, spacing) visible in the PHP code.\n"
-                    . "      *   Incorrect usage of WordPress APIs or functions.\n"
-                    . "  4.  **HTML/CSS/JS Issues (within the chunk):**\n"
-                    . "      *   Malformed HTML structure (unclosed tags, incorrect nesting visible within the chunk).\n"
-                    . "      *   Invalid CSS syntax found in `<style>` blocks or inline `style` attributes.\n"
-                    . "      *   Obvious JavaScript syntax errors or use of undefined variables/functions *if JS code is present in the chunk*.\n\n"
-                    . "**Output Requirements:**\n"
-                    . "Return your findings ONLY as a single, valid JSON object. This object must have a root key named 'issues', which is an array of issue objects. If no issues are found, return `{\"issues\": []}`.\n"
-                    . "Each issue object within the 'issues' array MUST contain exactly these fields in this specific order:\n" // Added order requirement
-                    . "  1.  `relative_line`: (integer or string \"start-end\") - The 1-based line number(s) where the issue *starts* or occurs, RELATIVE TO THE START OF THE PROVIDED CHUNK. The first line of the chunk is line 1. Use a string like `\"3-5\"` (e.g., `\"3-5\"`) for multi-line issues.\n"
-                    . "  2.  `original_code_snippet`: (string) The exact, unmodified line(s) of code from the input chunk, identified by `relative_line`, that contain the reported issue. If `relative_line` is a range, include all lines in that range, preserving original indentation and newlines.\n"
-                    . "  3.  `issue`: (string) A concise, specific description of the identified problem.\n"
-                    . "  4.  `severity`: (string) Classify the severity: 'Critical' (e.g., PHP syntax/fatal errors, major security flaws), 'High' (e.g., undefined functions, potential XSS), 'Medium' (e.g., deprecated functions, moderate logic issues), 'Low' (e.g., coding standards), or 'Info' (e.g., minor suggestions).\n"
-                    . "  5.  `fix_suggestion`: (string) **This field MUST NOT be empty.** Provide the complete, corrected code snippet intended to replace the `original_code_snippet`. If a direct code replacement is genuinely not feasible (e.g., requires complex external context or significant logic changes), provide clear, step-by-step instructions on how to manually fix the issue OR a clear explanation of *why* a code fix cannot be provided based *only* on the chunk's content. **Prioritize providing the corrected code snippet whenever possible.**\n"
-                    . "  6.  `auto_fixable`: (string) Indicate fixability based on the `fix_suggestion`: 'yes' (if a direct code replacement snippet is provided and likely safe), 'semi' (if a code snippet is provided but requires human review/context), or 'no' (if `fix_suggestion` contains instructions/explanation instead of a direct code snippet, or if the fix requires manual implementation/complex logic change).\n"
-                    . "  7.  `apply_method`: (string) Specify how the fix should be applied: 'replace_lines' (if `fix_suggestion` is a code snippet meant to replace the entire `original_code_snippet`) or 'modify_lines' (if `fix_suggestion` provides instructions or describes changes *within* the existing lines, often when `auto_fixable` is 'no' or 'semi').\n\n"
-                    . "**Important Constraints:**\n"
-                    . "*   Focus ONLY on the provided code chunk (`\$chunkContent`). Do not infer context or definitions from outside this chunk.\n"
-                    . "*   Do NOT invent issues or make assumptions. Only report concrete problems visible in the code.\n"
-                    . "*   Adhere strictly to the JSON output format and the specified fields/order for each issue.\n"
-                    . "*   Ensure `relative_line` correctly reflects the 1-based index within the provided chunk.\n"
-                    . "*   The `fix_suggestion` field MUST always contain content, either a code fix or an explanation/instructions.\n" // Added constraint reminder
-                    . "\n"
-                    . "**Code Chunk to Analyze (File: '{$filePath}', Lines {$startLine}-{$endLine} absolute):**\n```{$extension}\n{$chunkContent}\n```";
+        ////////////////////////////// 2 may 2025 ////////////////////////////
+        // $chunkPrompt = "Analyze the following code chunk provided by user '{$currentUser}' at {$currentUtcTime} UTC. "
+        //             . "The chunk originates from the file '{$filePath}' within a WordPress theme directory. This file likely contains a mix of PHP, HTML (including WordPress Gutenberg block comments like `<!-- wp:... -->`), possibly JavaScript, and CSS.\n\n"
+        //             . "This specific chunk represents lines {$startLine} to {$endLine} of the original file.\n\n"
+        //             . "**Your primary goal is to meticulously identify specific errors and violations *strictly within this chunk*. Pay critical attention to the following categories:**\n"
+        //             . "  1.  **PHP Errors (Highest Priority):**\n"
+        //             . "      *   Syntax Errors (Parse errors, unexpected tokens, missing semicolons/brackets, etc.).\n"
+        //             . "      *   Runtime Errors (Calls to undefined functions/methods, incorrect arguments to built-in functions, fatal errors like `echo ();`).\n"
+        //             . "      *   Logical Errors visible solely within the chunk.\n"
+        //             . "  2.  **Security Vulnerabilities:**\n"
+        //             . "      *   Improper Output Escaping: Identify any PHP variables echoed or printed within HTML context without appropriate WordPress escaping functions (e.g., `esc_html`, `esc_attr`, `esc_url`, `wp_kses_post`). Flag potential Cross-Site Scripting (XSS) risks.\n"
+        //             . "      *   Missing Nonces/Capability Checks *if relevant actions (like form processing hints) are visible within the chunk*.\n"
+        //             . "  3.  **WordPress Specific Issues:**\n"
+        //             . "      *   Use of deprecated WordPress functions, hooks, or parameters.\n"
+        //             . "      *   Violations of WordPress Coding Standards (naming conventions, spacing) visible in the PHP code.\n"
+        //             . "      *   Incorrect usage of WordPress APIs or functions.\n"
+        //             . "  4.  **HTML/CSS/JS Issues (within the chunk):**\n"
+        //             . "      *   Malformed HTML structure (unclosed tags, incorrect nesting visible within the chunk).\n"
+        //             . "      *   Invalid CSS syntax found in `<style>` blocks or inline `style` attributes.\n"
+        //             . "      *   Obvious JavaScript syntax errors or use of undefined variables/functions *if JS code is present in the chunk*.\n\n"
+        //             . "**Output Requirements:**\n"
+        //             . "Return your findings ONLY as a single, valid JSON object. This object must have a root key named 'issues', which is an array of issue objects. If no issues are found, return `{\"issues\": []}`.\n"
+        //             . "Each issue object within the 'issues' array MUST contain exactly these fields in this specific order:\n" // Added order requirement
+        //             . "  1.  `relative_line`: (integer or string \"start-end\") - The 1-based line number(s) where the issue *starts* or occurs, RELATIVE TO THE START OF THE PROVIDED CHUNK. The first line of the chunk is line 1. Use a string like `\"3-5\"` (e.g., `\"3-5\"`) for multi-line issues.\n"
+        //             . "  2.  `original_code_snippet`: (string) The exact, unmodified line(s) of code from the input chunk, identified by `relative_line`, that contain the reported issue. If `relative_line` is a range, include all lines in that range, preserving original indentation and newlines.\n"
+        //             . "  3.  `issue`: (string) A concise, specific description of the identified problem.\n"
+        //             . "  4.  `severity`: (string) Classify the severity: 'Critical' (e.g., PHP syntax/fatal errors, major security flaws), 'High' (e.g., undefined functions, potential XSS), 'Medium' (e.g., deprecated functions, moderate logic issues), 'Low' (e.g., coding standards), or 'Info' (e.g., minor suggestions).\n"
+        //             . "  5.  `fix_suggestion`: (string) **This field MUST NOT be empty.** Provide the complete, corrected code snippet intended to replace the `original_code_snippet`. If a direct code replacement is genuinely not feasible (e.g., requires complex external context or significant logic changes), provide clear, step-by-step instructions on how to manually fix the issue OR a clear explanation of *why* a code fix cannot be provided based *only* on the chunk's content. **Prioritize providing the corrected code snippet whenever possible.**\n"
+        //             . "  6.  `auto_fixable`: (string) Indicate fixability based on the `fix_suggestion`: 'yes' (if a direct code replacement snippet is provided and likely safe), 'semi' (if a code snippet is provided but requires human review/context), or 'no' (if `fix_suggestion` contains instructions/explanation instead of a direct code snippet, or if the fix requires manual implementation/complex logic change).\n"
+        //             . "  7.  `apply_method`: (string) Specify how the fix should be applied: 'replace_lines' (if `fix_suggestion` is a code snippet meant to replace the entire `original_code_snippet`) or 'modify_lines' (if `fix_suggestion` provides instructions or describes changes *within* the existing lines, often when `auto_fixable` is 'no' or 'semi').\n\n"
+        //             . "**Important Constraints:**\n"
+        //             . "*   Focus ONLY on the provided code chunk (`\$chunkContent`). Do not infer context or definitions from outside this chunk.\n"
+        //             . "*   Do NOT invent issues or make assumptions. Only report concrete problems visible in the code.\n"
+        //             . "*   Adhere strictly to the JSON output format and the specified fields/order for each issue.\n"
+        //             . "*   Ensure `relative_line` correctly reflects the 1-based index within the provided chunk.\n"
+        //             . "*   The `fix_suggestion` field MUST always contain content, either a code fix or an explanation/instructions.\n" // Added constraint reminder
+        //             . "\n"
+        //             . "**Code Chunk to Analyze (File: '{$filePath}', Lines {$startLine}-{$endLine} absolute):**\n```{$extension}\n{$chunkContent}\n```";
 
     // --- END PROMPT ---
-
+    $chunkPrompt = "Analyze the following code chunk provided by user '{$currentUser}' at {$currentUtcTime} UTC. "
+    . "The chunk originates from the file '{$filePath}' within a WordPress theme directory. This file likely contains a mix of PHP, HTML (including WordPress Gutenberg block comments like `<!-- wp:... -->`), possibly JavaScript, and CSS.\n\n"
+    . "This specific chunk represents lines {$startLine} to {$endLine} of the original file.\n\n"
+    . "**Your primary goal is to meticulously identify specific errors and violations *strictly within this chunk*. Pay critical attention to the following categories:**\n"
+    . "  1.  **PHP Errors (Highest Priority):**\n"
+    . "      *   Syntax Errors (Parse errors, unexpected tokens, missing semicolons/brackets, etc.).\n"
+    . "      *   Runtime Errors (Calls to undefined functions/methods, incorrect arguments to built-in functions, fatal errors like `echo ();`).\n"
+    . "      *   Logical Errors visible solely within the chunk.\n"
+    . "  2.  **Security Vulnerabilities:**\n"
+    . "      *   Improper Output Escaping: Identify any PHP variables echoed or printed within HTML context without appropriate WordPress escaping functions (e.g., `esc_html`, `esc_attr`, `esc_url`, `wp_kses_post`). Flag potential Cross-Site Scripting (XSS) risks.\n"
+    . "      *   Missing Nonces/Capability Checks *if relevant actions (like form processing hints) are visible within the chunk*.\n"
+    . "  3.  **WordPress Specific Issues:**\n"
+    . "      *   Use of deprecated WordPress functions, hooks, or parameters.\n"
+    . "      *   Violations of WordPress Coding Standards (naming conventions, spacing) visible in the PHP code.\n"
+    . "      *   Incorrect usage of WordPress APIs or functions.\n"
+    . "  4.  **HTML/CSS/JS Issues (within the chunk):**\n"
+    . "      *   Malformed HTML structure (unclosed tags, incorrect nesting visible within the chunk).\n"
+    . "      *   Invalid CSS syntax found in `<style>` blocks or inline `style` attributes.\n"
+    . "      *   Obvious JavaScript syntax errors or use of undefined variables/functions *if JS code is present in the chunk*.\n\n"
+    . "**Output Requirements:**\n"
+                . "Return your findings ONLY as a single, valid JSON object. This object must have a root key named 'issues', which is an array of issue objects. If no issues are found, return `{\"issues\": []}`.\n"
+                . "Each issue object within the 'issues' array MUST contain exactly these fields in this specific order:\n" // Added order requirement
+                . "  1.  `relative_line`: (integer or string \"start-end\") - The 1-based line number(s) where the issue *starts* or occurs, RELATIVE TO THE START OF THE PROVIDED CHUNK. The first line of the chunk is line 1. Use a string like `\"3-5\"` (e.g., `\"3-5\"`) for multi-line issues.\n"
+                . "  2.  `original_code_snippet`: (string) The exact, unmodified line(s) of code from the input chunk, identified by `relative_line`, that contain the reported issue. If `relative_line` is a range, include all lines in that range, preserving original indentation and newlines.\n"
+                . "  3.  `issue`: (string) A concise, specific description of the identified problem.\n"
+                . "  4.  `severity`: (string) Classify the severity: 'Critical' (e.g., PHP syntax/fatal errors, major security flaws), 'High' (e.g., undefined functions, potential XSS), 'Medium' (e.g., deprecated functions, moderate logic issues), 'Low' (e.g., coding standards), or 'Info' (e.g., minor suggestions).\n"
+                . "  5.  `fix_suggestion`: (string) **This field MUST NOT be empty.** Provide the complete, corrected code snippet intended to replace the `original_code_snippet`. If a direct code replacement is genuinely not feasible (e.g., requires complex external context or significant logic changes), provide clear, step-by-step instructions on how to manually fix the issue OR a clear explanation of *why* a code fix cannot be provided based *only* on the chunk's content. **Prioritize providing the corrected code snippet whenever possible.**\n"
+                . "  6.  `auto_fixable`: (string) Indicate fixability based on the `fix_suggestion`: 'yes' (if a direct code replacement snippet is provided and likely safe), 'semi' (if a code snippet is provided but requires human review/context), or 'no' (if `fix_suggestion` contains instructions/explanation instead of a direct code snippet, or if the fix requires manual implementation/complex logic change).\n"
+                . "  7.  `apply_method`: (string) Specify how the fix should be applied: 'replace_lines' (if `fix_suggestion` is a code snippet meant to replace the entire `original_code_snippet`) or 'modify_lines' (if `fix_suggestion` provides instructions or describes changes *within* the existing lines, often when `auto_fixable` is 'no' or 'semi').\n\n"
+                . "**Important Constraints:**\n"
+                . "*   Focus ONLY on the provided code chunk (`\$chunkContent`). Do not infer context or definitions from outside this chunk.\n"
+                . "*   Do NOT invent issues or make assumptions. Only report concrete problems visible in the code.\n"
+                . "*   Adhere strictly to the JSON output format and the specified fields/order for each issue.\n"
+                . "*   Ensure `relative_line` correctly reflects the 1-based index within the provided chunk.\n"
+                . "*   The `fix_suggestion` field MUST always contain content, either a code fix or an explanation/instructions.\n" // Added constraint reminder
+                . "\n"
+                . "**Code Chunk to Analyze (File: '{$filePath}', Lines {$startLine}-{$endLine} absolute):**\n```{$extension}\n{$chunkContent}\n```";
  
             // echo '<pre style="color: black;">' . htmlspecialchars($chunkPrompt) . '</pre>';
             // die();
@@ -686,5 +711,173 @@ class WordPressScanController extends Controller
         }
     }
 
+    /**
+     * Analyze WordPress post content for SEO errors using OpenAI.
+     *
+     * @param Request $request
+     * @param OpenAIService $openaiService // Inject the service - Note: We won't use this directly if implementing here
+     * @return JsonResponse
+     */
+    public function analyzePostForSEO(Request $request): JsonResponse // Removed OpenAIService injection as we implement directly
+    {
+        // Validate the incoming payload
+        try {
+            $validatedData = $request->validate([
+                'post_id' => 'required|integer',
+                'post_title' => 'required|string',
+                //'post_content' => 'nullable|string', // Original content might be useful for context later
+                //'post_excerpt' => 'nullable|string',
+                //'post_type' => 'required|string',
+                //'permalink' => 'required|url',
+                //'site_url' => 'required|url',
+                //'focus_keyword' => 'nullable|string',
+                //'plain_content' => 'required|string', // Use plain text for analysis
+            ]);
 
+            Log::info("Received SEO analysis request for post ID: " . $validatedData['post_id'] . " from site: " . $validatedData['site_url']);
+
+            // --- Configuration ---
+            $openaiApiKey = config('services.openai.api_key');
+            $openaiModel = config('services.openai.model', 'gpt-4.1'); // Or a specific model for SEO
+
+            if (!$openaiApiKey) {
+                Log::error("OpenAI API Key is not configured for SEO analysis.");
+                return response()->json(['status' => 'error', 'message' => 'OpenAI API Key is not configured.'], 500);
+            }
+
+            // Prepare content for analysis
+            $contentToAnalyze = $validatedData['plain_content'];
+            $title = $validatedData['post_title'];
+            $focusKeyword = $validatedData['focus_keyword'] ?? 'Not provided'; // Handle null case
+
+            // --- Construct OpenAI Prompt ---
+            $seoPrompt = "Analyze the following WordPress post content for SEO optimization based on the provided title and focus keyword. The post type is '{$validatedData['post_type']}'.\n\n"
+                . "**Post Title:** {$title}\n"
+                . "**Focus Keyword:** {$focusKeyword}\n"
+                . "**Permalink:** {$validatedData['permalink']}\n\n"
+                . "**Content to Analyze (Plain Text):**\n```\n{$contentToAnalyze}\n```\n\n"
+                . "**Analysis Requirements:**\n"
+                . "Evaluate the content based on common on-page SEO factors, including (but not limited to):\n"
+                . "  1.  **Focus Keyword Usage:** Presence and placement in title, headings (if discernible), content, and meta description (if inferable).\n"
+                . "  2.  **Title Tag Optimization:** Length, keyword inclusion, clarity.\n"
+                . "  3.  **Content Readability:** Sentence length, paragraph structure, use of transition words (assess based on plain text).\n"
+                . "  4.  **Content Length:** Adequacy for the topic (general assessment).\n"
+                . "  5.  **Heading Structure (Inferential):** Assess if the content seems logically structured, even without explicit H tags.\n"
+                . "  6.  **Internal/External Linking (Presence):** Mention if linking seems absent or could be improved (cannot validate URLs).\n"
+                . "  7.  **Image Alt Text (Conceptual):** Remind the user to check image alt text if images are likely present.\n\n"
+                . "**Output Requirements:**\n"
+                . "Return ONLY a single, valid JSON object with the following structure:\n"
+                . "{\n"
+                . "  \"seo_score\": <integer, 0-100, estimate based on findings>,\n"
+                . "  \"issues\": [\n"
+                . "    { \"type\": \"<Category e.g., Keyword Density>\", \"message\": \"<Specific issue description>\", \"severity\": \"<Low|Medium|High>\", \"suggestion\": \"<Actionable suggestion for this specific issue>\" },\n"
+                . "    ...\n"
+                . "  ]\n"
+                . "}\n"
+                . "If no significant issues are found, return an empty 'issues' array. Provide a reasonable 'seo_score'.";
+
+
+            // --- Call OpenAI API ---
+            try {
+                $response = Http::withHeaders([
+                    'Authorization' => 'Bearer ' . $openaiApiKey,
+                    'Content-Type' => 'application/json',
+                ])->timeout(120) // Adjust timeout as needed
+                  ->post('https://api.openai.com/v1/chat/completions', [
+                    'model' => $openaiModel,
+                    'messages' => [
+                        [
+                            'role' => 'system',
+                            'content' => "You are an SEO analysis assistant. Analyze the provided WordPress post content based on the user's prompt and return ONLY the specified valid JSON object containing 'seo_score', 'issues', and 'suggestions'."
+                        ],
+                        ['role' => 'user', 'content' => $seoPrompt]
+                    ],
+                    'temperature' => 0.3, // Lower temperature for more deterministic SEO analysis
+                    'max_tokens' => 2500, // Adjust based on expected analysis length
+                    //'response_format' => ['type' => 'json_object'], // Request JSON output
+                ]);
+
+                if ($response->failed()) {
+                    $errorBody = $response->body();
+                    Log::error("OpenAI API request failed for SEO analysis (Post ID: {$validatedData['post_id']}). Status: " . $response->status() . ". Body: " . $errorBody);
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Failed to communicate with AI analysis service. Status: ' . $response->status()
+                    ], 502); // Bad Gateway or appropriate error
+                }
+
+                $responseData = $response->json(); // Use Laravel's built-in JSON parsing
+                $responseContent = $responseData['choices'][0]['message']['content'] ?? null;
+
+                if (!$responseContent) {
+                    Log::error("Failed to extract content from OpenAI API response for SEO analysis (Post ID: {$validatedData['post_id']})");
+                    return response()->json(['status' => 'error', 'message' => 'Received invalid response from AI analysis service.'], 500);
+                }
+
+                // Attempt to decode the JSON content from the AI
+                try {
+                    $seoAnalysisResult = json_decode($responseContent, true, 512, JSON_THROW_ON_ERROR);
+
+                    // Basic validation of the returned structure
+                    if (!isset($seoAnalysisResult['seo_score']) || !isset($seoAnalysisResult['issues']) || !is_array($seoAnalysisResult['issues'])) {
+                         Log::warning("OpenAI response for SEO analysis (Post ID: {$validatedData['post_id']}) has incorrect base structure: " . $responseContent);
+                         return response()->json([
+                            'status' => 'error',
+                            'message' => 'AI analysis returned data in an unexpected format (missing score or issues array).',
+                            'raw_response' => $responseContent
+                         ], 500);
+                    }
+
+                    // Validate structure of each issue
+                    foreach ($seoAnalysisResult['issues'] as $issue) {
+                        if (!isset($issue['type']) || !isset($issue['message']) || !isset($issue['severity']) || !isset($issue['suggestion'])) {
+                             Log::warning("OpenAI response for SEO analysis (Post ID: {$validatedData['post_id']}) has an issue with incorrect structure: " . json_encode($issue) . " in response: " . $responseContent);
+                             return response()->json([
+                                'status' => 'error',
+                                'message' => 'AI analysis returned an issue with missing fields.',
+                                'raw_response' => $responseContent
+                             ], 500);
+                        }
+                    }
+
+
+                    Log::info("SEO analysis successful for post ID: " . $validatedData['post_id']);
+                    return response()->json([
+                        'status' => 'success',
+                        'message' => 'SEO analysis completed.',
+                        'data' => $seoAnalysisResult // Return the parsed analysis data
+                    ]);
+
+                } catch (JsonException $e) {
+                    Log::error("Failed to parse JSON response from OpenAI for SEO analysis (Post ID: {$validatedData['post_id']}). Error: " . $e->getMessage() . ". Response: " . $responseContent);
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Failed to interpret AI analysis response.',
+                        'raw_response' => $responseContent // Optionally include raw response
+                    ], 500);
+                }
+
+            } catch (ConnectionException $e) {
+                Log::error("HTTP Connection error during SEO analysis (Post ID: {$validatedData['post_id']}): " . $e->getMessage());
+                return response()->json(['status' => 'error', 'message' => 'Could not connect to AI analysis service.'], 504); // Gateway Timeout
+            } catch (Exception $e) { // Catch broader exceptions during the API call phase
+                Log::error("General error during OpenAI API call for SEO analysis (Post ID: {$validatedData['post_id']}): " . $e->getMessage());
+                return response()->json(['status' => 'error', 'message' => 'An unexpected error occurred while contacting the AI analysis service.'], 500);
+            }
+
+        } catch (ValidationException $e) {
+            Log::error("Validation failed for SEO analysis request: " . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid payload provided.',
+                'errors' => $e->errors()
+            ], 422); // Unprocessable Entity
+        } catch (\Exception $e) { // Catch broader exceptions (e.g., config issues)
+            Log::error("General error during SEO analysis setup (Post ID {$request->input('post_id', 'N/A')}): " . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred during SEO analysis.'
+            ], 500);
+        }
+    }
 } // End of Controller Class

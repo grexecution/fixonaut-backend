@@ -1,0 +1,47 @@
+{
+    "id": "contact-info-locations-analysis-1746184901",
+    "file": "contact-info-locations.php",
+    "full_path": "wordpress/localhost/contact-info-locations.php",
+    "issues": [
+        {
+            "original_code_snippet": "<!-- wp:navigation-link {\"label\":\"<?php echo esc_html_x( 'X', 'Refers to the social media platform formerly known as Twitter.', 'twentytwentyfive' ); ?>\",\"url\":\"#\"} /-->",
+            "issue": "Improper use of PHP echo within a JSON context.",
+            "severity": "High",
+            "fix_suggestion": "<!-- wp:navigation-link {\"label\":\"X\",\"url\":\"#\"} /-->",
+            "auto_fixable": "yes",
+            "apply_method": "replace_lines",
+            "location": 44
+        },
+        {
+            "original_code_snippet": "<p class=\"has-medium-font-size\"><?php esc_html_e( 'example@example.com', 'twentytwentyfive' ); ?></p>",
+            "issue": "Improper use of the esc_html_e function for a static string.",
+            "severity": "Low",
+            "fix_suggestion": "<p class=\"has-medium-font-size\">example@example.com</p>",
+            "auto_fixable": "yes",
+            "apply_method": "replace_lines",
+            "location": 58
+        },
+        {
+            "original_code_snippet": "<p class=\"has-medium-font-size\"><?php esc_html_e( '123 Example St. Manhattan, NY 10300 United States', 'twentytwentyfive' ); ?></p>",
+            "issue": "Improper use of the esc_html_e function for a static string.",
+            "severity": "Low",
+            "fix_suggestion": "<p class=\"has-medium-font-size\">123 Example St. Manhattan, NY 10300 United States</p>",
+            "auto_fixable": "yes",
+            "apply_method": "replace_lines",
+            "location": 80
+        },
+        {
+            "original_code_snippet": "<p class=\"has-medium-font-size\"><?php esc_html_e( '123 Example St. Manhattan, NY 10300 United States', 'twentytwentyfive' ); ?></p>",
+            "issue": "Improper use of the esc_html_e function for a static string.",
+            "severity": "Low",
+            "fix_suggestion": "<p class=\"has-medium-font-size\">123 Example St. Manhattan, NY 10300 United States</p>",
+            "auto_fixable": "yes",
+            "apply_method": "replace_lines",
+            "location": 92
+        }
+    ],
+    "documentation": {
+        "issue_details": "Analysis complete. Review individual issues.",
+        "fix_explanation": "Apply fixes based on individual issue suggestions and severity."
+    }
+}

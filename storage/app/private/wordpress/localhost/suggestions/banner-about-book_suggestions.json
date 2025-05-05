@@ -1,0 +1,38 @@
+{
+    "id": "banner-about-book-analysis-1746119487",
+    "file": "banner-about-book.php",
+    "full_path": "wordpress/localhost/banner-about-book.php",
+    "issues": [
+        {
+            "original_code_snippet": "<figure class=\"wp-block-image size-full\"><img src=\"<?php echo esc_url( get_template_directory_uri() ); ?>/assets/images/book-image-landing.webp\" alt=\"<?php esc_attr_e( 'Image of a book', 'twentytwentyfive' ); ?>\" style=\"aspect-ratio:1;object-fit:cover\"/></figure>",
+            "issue": "Potential XSS vulnerability due to improper escaping of the image URL.",
+            "severity": "High",
+            "fix_suggestion": "<figure class=\"wp-block-image size-full\"><img src=\"<?php echo esc_url( get_template_directory_uri() . '/assets/images/book-image-landing.webp' ); ?>\" alt=\"<?php esc_attr_e( 'Image of a book', 'twentytwentyfive' ); ?>\" style=\"aspect-ratio:1;object-fit:cover\"/></figure>",
+            "auto_fixable": "yes",
+            "apply_method": "replace_lines",
+            "location": 38
+        },
+        {
+            "original_code_snippet": "The entire code chunk",
+            "issue": "Missing nonce checks or capability checks for security.",
+            "severity": "Medium",
+            "fix_suggestion": "This issue cannot be fixed directly in this code chunk as it requires additional context. However, ensure that any form submissions or data modifications related to this code are protected by nonce checks or capability checks.",
+            "auto_fixable": "no",
+            "apply_method": "modify_lines",
+            "location": "1-42"
+        },
+        {
+            "original_code_snippet": "The entire code chunk",
+            "issue": "The code does not follow WordPress PHP Coding Standards. Specifically, there is inconsistent spacing around parentheses and operators.",
+            "severity": "Low",
+            "fix_suggestion": "Ensure that there is a space on either side of the parentheses and operators. For example, change `esc_html_e( 'About the book', 'twentytwentyfive' );` to `esc_html_e( 'About the book', 'twentytwentyfive' );`",
+            "auto_fixable": "semi",
+            "apply_method": "modify_lines",
+            "location": "1-42"
+        }
+    ],
+    "documentation": {
+        "issue_details": "Analysis complete. Review individual issues.",
+        "fix_explanation": "Apply fixes based on individual issue suggestions and severity."
+    }
+}

@@ -1,0 +1,47 @@
+{
+    "id": "banner-poster-analysis-1746163922",
+    "file": "banner-poster.php",
+    "full_path": "wordpress/localhost/banner-poster.php",
+    "issues": [
+        {
+            "original_code_snippet": "<?php",
+            "issue": "The opening PHP tag is unnecessary.",
+            "severity": "Low",
+            "fix_suggestion": "",
+            "auto_fixable": "yes",
+            "apply_method": "replace_lines",
+            "location": 1
+        },
+        {
+            "original_code_snippet": "<!-- wp:cover {\"url\":\"<?php echo esc_url( get_template_directory_uri() ); ?>/assets/images/poster-image-background.webp\",\"alt\":\"Picture of a historical building in ruins.\",\"dimRatio\":30,\"overlayColor\":\"contrast\",\"isUserOverlayColor\":true,\"minHeight\":100,\"minHeightUnit\":\"vh\",\"align\":\"full\",\"style\":{\"elements\":{\"link\":{\"color\":{\"text\":\"var:preset|color|accent-1\"}}},\"spacing\":{\"padding\":{\"right\":\"var:preset|spacing|50\",\"left\":\"var:preset|spacing|50\",\"top\":\"var:preset|spacing|50\",\"bottom\":\"var:preset|spacing|50\"},\"margin\":{\"top\":\"0\",\"bottom\":\"0\"}},\"textColor\":\"accent-1\",\"layout\":{\"type\":\"constrained\"}} -->",
+            "issue": "The PHP code is embedded within a Gutenberg block comment, which is not a valid way to include dynamic data in block attributes.",
+            "severity": "Critical",
+            "fix_suggestion": "The PHP code should be moved out of the Gutenberg block comment and the dynamic data should be passed to the block via block attributes in the PHP code.",
+            "auto_fixable": "no",
+            "apply_method": "modify_lines",
+            "location": 14
+        },
+        {
+            "original_code_snippet": "<div class=\"wp-block-cover alignfull has-accent-1-color has-text-color has-link-color\" style=\"margin-top:0;margin-bottom:0;padding-top:var(--wp--preset--spacing--50);padding-right:var(--wp--preset--spacing--50);padding-bottom:var(--wp--preset--spacing--50);padding-left:var(--wp--preset--spacing--50);min-height:100vh\"><span aria-hidden=\"true\" class=\"wp-block-cover__background has-contrast-background-color has-background-dim-30 has-background-dim\"></span><img class=\"wp-block-cover__image-background\" alt=\"<?php esc_attr_e( 'Picture of a historical building in ruins.', 'twentytwentyfive' ); ?>\" src=\"<?php echo esc_url( get_template_directory_uri() ); ?>/assets/images/poster-image-background.webp\" data-object-fit=\"cover\"/>",
+            "issue": "The PHP code is embedded within HTML, which is not a valid way to include dynamic data in HTML attributes.",
+            "severity": "Critical",
+            "fix_suggestion": "The PHP code should be moved out of the HTML and the dynamic data should be passed to the HTML via PHP echo statements.",
+            "auto_fixable": "no",
+            "apply_method": "modify_lines",
+            "location": 15
+        },
+        {
+            "original_code_snippet": "<?php\n\t\t\t\t\techo wp_kses_post(\n\t\t\t\t\t\t/* translators: This string contains the word \"Stories\" in four different languages with the first item in the locale's language. */\n\t\t\t\t\t\t_x( '\u201cStories, <span lang=\"es\">historias</span>, <span lang=\"uk\">i\u0441\u0442\u043e\u0440\u0456\u0457</span>, <span lang=\"el\">i\u03c3\u03c4\u03bf\u03c1\u03af\u03b5\u03c2</span>\u201d', 'Placeholder heading in four languages.', 'twentytwentyfive' )\n\t\t\t\t\t);\n\t\t\t\t\t?>",
+            "issue": "The use of wp_kses_post() function is unnecessary here as _x() function already escapes the output.",
+            "severity": "Low",
+            "fix_suggestion": "<?php\n\t\t\t\t\techo _x( '\u201cStories, <span lang=\"es\">historias</span>, <span lang=\"uk\">i\u0441\u0442\u043e\u0440\u0456\u0457</span>, <span lang=\"el\">i\u03c3\u03c4\u03bf\u03c1\u03af\u03b5\u03c2</span>\u201d', 'Placeholder heading in four languages.', 'twentytwentyfive' );\n\t\t\t\t\t?>",
+            "auto_fixable": "yes",
+            "apply_method": "replace_lines",
+            "location": 32
+        }
+    ],
+    "documentation": {
+        "issue_details": "Analysis complete. Review individual issues.",
+        "fix_explanation": "Apply fixes based on individual issue suggestions and severity."
+    }
+}

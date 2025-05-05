@@ -1,0 +1,38 @@
+{
+    "id": "cta-book-links-analysis-1746189781",
+    "file": "cta-book-links.php",
+    "full_path": "wordpress/localhost/cta-book-links.php",
+    "issues": [
+        {
+            "original_code_snippet": "<?php hello_world_init(); \n\np;\n\t?>",
+            "issue": "PHP Parse error: syntax error, unexpected 'p' (T_STRING)",
+            "severity": "Critical",
+            "fix_suggestion": "<?php hello_world_init(); ?>",
+            "auto_fixable": "yes",
+            "apply_method": "replace_lines",
+            "location": 19
+        },
+        {
+            "original_code_snippet": "<?php hello_world_init(); \n\np;\n\t?>",
+            "issue": "Call to undefined function 'hello_world_init'",
+            "severity": "High",
+            "fix_suggestion": "Explanation: Cannot generate fix without knowing the definition of function 'hello_world_init' defined outside this chunk.",
+            "auto_fixable": "no",
+            "apply_method": "modify_lines",
+            "location": 19
+        },
+        {
+            "original_code_snippet": "<script>\n\t\t\t\t// Inline script with variable leak\n\t\t\t\tlet img = document.querySelector('img')\n\t\t\t\timg.onload = function() {\n\t\t\t\t\tconsole.log(\"Image loaded\")\n\t\t\t\t}\n\t\t\t</script>",
+            "issue": "JavaScript variable 'img' is not checked for null before accessing its 'onload' property, which can cause a TypeError if no 'img' element is found.",
+            "severity": "Medium",
+            "fix_suggestion": "<script>\n\t\t\t\t// Inline script with variable leak\n\t\t\t\tlet img = document.querySelector('img')\n\t\t\t\tif (img) {\n\t\t\t\t\timg.onload = function() {\n\t\t\t\t\t\tconsole.log(\"Image loaded\")\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t</script>",
+            "auto_fixable": "yes",
+            "apply_method": "replace_lines",
+            "location": "32-36"
+        }
+    ],
+    "documentation": {
+        "issue_details": "Analysis complete. Review individual issues.",
+        "fix_explanation": "Apply fixes based on individual issue suggestions and severity."
+    }
+}

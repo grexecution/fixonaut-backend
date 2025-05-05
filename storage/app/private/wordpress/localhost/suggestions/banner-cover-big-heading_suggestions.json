@@ -1,0 +1,20 @@
+{
+    "id": "banner-cover-big-heading-analysis-1746162856",
+    "file": "banner-cover-big-heading.php",
+    "full_path": "wordpress/localhost/banner-cover-big-heading.php",
+    "issues": [
+        {
+            "original_code_snippet": "<?php echo esc_html_e( 'Stories', 'twentytwentyfive' ); ?>",
+            "issue": "Incorrect usage of WordPress translation function esc_html_e().",
+            "severity": "Medium",
+            "fix_suggestion": "<?php esc_html_e( 'Stories', 'twentytwentyfive' ); ?>",
+            "auto_fixable": "yes",
+            "apply_method": "replace_lines",
+            "location": 32
+        }
+    ],
+    "documentation": {
+        "issue_details": "Analysis complete. Review individual issues.",
+        "fix_explanation": "Apply fixes based on individual issue suggestions and severity."
+    }
+}
