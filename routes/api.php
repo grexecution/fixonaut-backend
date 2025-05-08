@@ -54,3 +54,6 @@ Route::get('/latest-scans', [WordPressScanController::class, 'getLatestScansWith
 // New route for SEO analysis of WordPress post content
 Route::post('/analyze-seo', [WordPressScanController::class, 'analyzePostForSEO']);
 
+// New route for live chat suggestions
+Route::post('/live-chat-suggestion', [WordPressScanController::class, 'liveChatSuggestion']);
+

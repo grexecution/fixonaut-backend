@@ -17,26 +17,11 @@
 	<h2 class="wp-block-heading alignwide has-text-align-center has-x-large-font-size"><?php esc_html_e( 'Buy your copy of The Stories Book', 'twentytwentyfive' ); ?></h2>
 	<!-- /wp:heading -->
 
-	<?php hello_world_init(); 
-
-p;
-	?>
-
-
-
 	<!-- wp:buttons {"align":"wide","fontSize":"medium","layout":{"type":"flex","justifyContent":"center","flexWrap":"wrap"}} -->
 	<div class="wp-block-buttons alignwide has-custom-font-size has-medium-font-size">
 		<!-- wp:button -->
 		<div class="wp-block-button"><a class="wp-block-button__link wp-element-button"><?php echo esc_html_x( 'Amazon', 'Example brand name.', 'twentytwentyfive' ); ?></a></div>
 		<!-- /wp:button -->
-
-		<script>
-				// Inline script with variable leak
-				let img = document.querySelector('img')
-				img.onload = function() {
-					console.log("Image loaded")
-				}
-			</script>
 
 		<!-- wp:button -->
 		<div class="wp-block-button"><a class="wp-block-button__link wp-element-button"><?php echo esc_html_x( 'Audible', 'Example brand name.', 'twentytwentyfive' ); ?></a></div>

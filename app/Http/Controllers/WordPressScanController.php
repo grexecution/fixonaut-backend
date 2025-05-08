@@ -880,4 +880,54 @@ class WordPressScanController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Handle live chat suggestions.
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function liveChatSuggestion(Request $request): JsonResponse
+    {
+        $validatedData = $request->validate([
+            'message' => 'required|string',
+        ]);
+
+        $message = $validatedData['message'];
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . config('services.openai.api_key'),
+                'Content-Type' => 'application/json',
+            ])->post('https://api.openai.com/v1/chat/completions', [
+                'model' => config('services.openai.model', 'gpt-4.1'),
+                'messages' => [
+                    ['role' => 'system', 'content' => 'You are a coding expert. Your primary function is to provide expert-level assistance with all aspects of software development, including but not limited to: code generation, debugging, algorithm design, system architecture, best practices, and explaining complex technical concepts. Strive for accuracy, efficiency, and clarity in all your responses.'],
+                    ['role' => 'user', 'content' => $message],
+                ],
+                'temperature' => 0.7,
+                'max_tokens' => 2500,
+            ]);
+
+            if ($response->failed()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Failed to get a response from the AI service.',
+                ], 502);
+            }
+
+            $responseData = $response->json();
+            $suggestion = $responseData['choices'][0]['message']['content'] ?? 'No suggestion available.';
+
+            return response()->json([
+                'status' => 'success',
+                'suggestion' => $suggestion,
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An unexpected error occurred: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 } // End of Controller Class

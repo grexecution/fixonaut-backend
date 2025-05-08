@@ -35,7 +35,7 @@
 			<!-- /wp:image -->
 		</div>
 		<!-- /wp:column -->
-	</div>
+<figure class="wp-block-image size-full"><img src="<?php echo esc_url( get_template_directory_uri() . '/assets/images/book-image-landing.webp' ); ?>" alt="<?php esc_attr_e( 'Image of a book', 'twentytwentyfive' ); ?>" style="aspect-ratio:1;object-fit:cover"/></figure>
 	<!-- /wp:columns -->
 </div>
 <!-- /wp:group -->
